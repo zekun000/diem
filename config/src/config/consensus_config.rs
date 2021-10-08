@@ -47,8 +47,8 @@ impl Default for ConsensusConfig {
             safety_rules: SafetyRulesConfig::default(),
             sync_only: false,
             mempool_poll_count: 1,
-            decoupled_execution: false, // by default, we turn of the decoupling execution feature
-            channel_size: 30,           // hard-coded
+            decoupled_execution: true, // by default, we turn of the decoupling execution feature
+            channel_size: 30,          // hard-coded
             back_pressure_limit: 10,
         }
     }
