@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use diem_types::on_chain_config::{ConsensusConfigV1, OnChainConsensusConfig};
 use diem_types::{
     account_address::AccountAddress,
     account_config::diem_root_address,
     transaction::{Script, WriteSetPayload},
 };
 use handlebars::Handlebars;
+use move_core_types::transaction_argument::TransactionArgument;
 use move_lang::{compiled_unit::AnnotatedCompiledUnit, Compiler, Flags};
 use serde::Serialize;
 use std::{collections::HashMap, io::Write, path::PathBuf};
@@ -34,7 +36,14 @@ fn compile_admin_script(input: &str) -> Result<Script> {
     let mut temp_file = NamedTempFile::new()?;
     temp_file.write_all(input.as_bytes())?;
     let cur_path = temp_file.path().to_str().unwrap().to_owned();
-    Ok(Script::new(compile_script(cur_path), vec![], vec![]))
+    let consensus_config = OnChainConsensusConfig::V1(ConsensusConfigV1 { two_chain: true });
+    Ok(Script::new(
+        compile_script(cur_path),
+        vec![],
+        vec![TransactionArgument::U8Vector(
+            bcs::to_bytes(&consensus_config).unwrap(),
+        )],
+    ))
 }
 
 pub fn template_path() -> PathBuf {
