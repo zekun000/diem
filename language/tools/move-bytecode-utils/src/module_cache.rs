@@ -4,6 +4,7 @@
 use anyhow::{anyhow, Result};
 use move_binary_format::CompiledModule;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
+use std::sync::Arc;
 use std::{
     cell::RefCell,
     collections::{btree_map::Entry, BTreeMap},
@@ -16,12 +17,12 @@ use std::{
 pub trait GetModule {
     type Error: Debug;
 
-    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error>;
+    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error>;
 }
 
 /// Simple in-memory module cache
 pub struct ModuleCache<R: ModuleResolver> {
-    cache: RefCell<BTreeMap<ModuleId, CompiledModule>>,
+    cache: RefCell<BTreeMap<ModuleId, Arc<CompiledModule>>>,
     resolver: R,
 }
 
@@ -34,14 +35,14 @@ impl<R: ModuleResolver> ModuleCache<R> {
     }
 
     pub fn add(&self, id: ModuleId, m: CompiledModule) {
-        self.cache.borrow_mut().insert(id, m);
+        self.cache.borrow_mut().insert(id, Arc::new(m));
     }
 }
 
 impl<R: ModuleResolver> GetModule for ModuleCache<R> {
     type Error = anyhow::Error;
 
-    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
+    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
         Ok(Some(match self.cache.borrow_mut().entry(id.clone()) {
             Entry::Vacant(entry) => {
                 let module_bytes = self
@@ -49,8 +50,10 @@ impl<R: ModuleResolver> GetModule for ModuleCache<R> {
                     .get_module(id)
                     .map_err(|_| anyhow!("Failed to get module {:?}", id))?
                     .ok_or_else(|| anyhow!("Module {:?} doesn't exist", id))?;
-                let module = CompiledModule::deserialize(&module_bytes)
-                    .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?;
+                let module = Arc::new(
+                    CompiledModule::deserialize(&module_bytes)
+                        .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?,
+                );
                 entry.insert(module.clone());
                 module
             }
@@ -61,7 +64,7 @@ impl<R: ModuleResolver> GetModule for ModuleCache<R> {
 
 /// Simple in-memory module cache that implements Sync
 pub struct SyncModuleCache<R: ModuleResolver> {
-    cache: RwLock<BTreeMap<ModuleId, CompiledModule>>,
+    cache: RwLock<BTreeMap<ModuleId, Arc<CompiledModule>>>,
     resolver: R,
 }
 
@@ -74,14 +77,14 @@ impl<R: ModuleResolver> SyncModuleCache<R> {
     }
 
     pub fn add(&self, id: ModuleId, m: CompiledModule) {
-        self.cache.write().unwrap().insert(id, m);
+        self.cache.write().unwrap().insert(id, Arc::new(m));
     }
 }
 
 impl<R: ModuleResolver> GetModule for SyncModuleCache<R> {
     type Error = anyhow::Error;
 
-    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
+    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
         if let Some(compiled_module) = self.cache.read().unwrap().get(id) {
             return Ok(Some(compiled_module.clone()));
         }
@@ -91,8 +94,10 @@ impl<R: ModuleResolver> GetModule for SyncModuleCache<R> {
             .get_module(id)
             .map_err(|_| anyhow!("Failed to get module {:?}", id))?
         {
-            let module = CompiledModule::deserialize(&module_bytes)
-                .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?;
+            let module = Arc::new(
+                CompiledModule::deserialize(&module_bytes)
+                    .map_err(|_| anyhow!("Failure deserializing module {:?}", id))?,
+            );
 
             self.cache
                 .write()

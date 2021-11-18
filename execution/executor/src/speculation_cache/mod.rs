@@ -23,13 +23,18 @@ use consensus_types::block::Block;
 use diem_crypto::{hash::PRE_GENESIS_BLOCK_ID, HashValue};
 use diem_infallible::Mutex;
 use diem_logger::prelude::*;
+use diem_types::account_state_blob::AccountStateBlob;
 use diem_types::{ledger_info::LedgerInfo, transaction::Transaction};
 use executor_types::{Error, ExecutedTrees, ProcessedVMOutput};
+use scratchpad::SparseMerkleTree;
+use std::collections::VecDeque;
 use std::{
     collections::HashMap,
     sync::{Arc, Weak},
 };
 use storage_interface::{StartupInfo, TreeState};
+
+const SMT_CACHE_MAX: usize = 10000;
 
 /// The struct that stores all speculation result of its counterpart in consensus.
 pub(crate) struct SpeculationBlock {
@@ -113,6 +118,7 @@ pub(crate) struct SpeculationCache {
     // A pointer to the global block map keyed by id to achieve O(1) lookup time complexity.
     // It is optional but an optimization.
     block_map: Arc<Mutex<HashMap<HashValue, Weak<Mutex<SpeculationBlock>>>>>,
+    smt_cache: Mutex<VecDeque<Arc<SparseMerkleTree<AccountStateBlob>>>>,
 }
 
 impl SpeculationCache {
@@ -123,6 +129,7 @@ impl SpeculationCache {
             heads: vec![],
             block_map: Arc::new(Mutex::new(HashMap::new())),
             committed_block_id: *PRE_GENESIS_BLOCK_ID,
+            smt_cache: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -147,6 +154,7 @@ impl SpeculationCache {
             heads: vec![],
             block_map: Arc::new(Mutex::new(HashMap::new())),
             committed_block_id: *PRE_GENESIS_BLOCK_ID,
+            smt_cache: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -186,6 +194,13 @@ impl SpeculationCache {
             );
             id
         };
+        {
+            let mut locked = self.smt_cache.lock();
+            if locked.len() >= SMT_CACHE_MAX {
+                locked.pop_front();
+            }
+            locked.push_back(committed_trees.state_tree().clone())
+        }
         self.committed_block_id = new_root_block_id;
         self.committed_trees = committed_trees.clone();
         self.synced_trees = committed_trees;

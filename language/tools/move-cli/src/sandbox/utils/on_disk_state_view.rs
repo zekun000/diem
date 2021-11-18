@@ -24,6 +24,7 @@ use move_lang::{shared::NumericalAddress, MOVE_COMPILED_INTERFACES_DIR};
 use move_symbol_pool::Symbol;
 use resource_viewer::{AnnotatedMoveStruct, AnnotatedMoveValue, MoveValueAnnotator};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use std::{
     collections::BTreeMap,
     convert::{TryFrom, TryInto},
@@ -555,11 +556,11 @@ impl ResourceResolver for OnDiskStateView {
 impl GetModule for OnDiskStateView {
     type Error = anyhow::Error;
 
-    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<CompiledModule>, Self::Error> {
+    fn get_module_by_id(&self, id: &ModuleId) -> Result<Option<Arc<CompiledModule>>, Self::Error> {
         if let Some(bytes) = self.get_module_bytes(id)? {
             let module = CompiledModule::deserialize(&bytes)
                 .map_err(|e| anyhow!("Failure deserializing module {:?}: {:?}", id, e))?;
-            Ok(Some(module))
+            Ok(Some(Arc::new(module)))
         } else {
             Ok(None)
         }

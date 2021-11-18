@@ -49,7 +49,7 @@ use rand::rngs::StdRng;
 const MAX_TXN_BATCH_SIZE: usize = 100;
 const MAX_TXNS: u64 = 1_000_000;
 const SEND_AMOUNT: u64 = 1;
-const TXN_EXPIRATION_SECONDS: u64 = 180;
+const TXN_EXPIRATION_SECONDS: u64 = 18000;
 const TXN_MAX_WAIT: Duration = Duration::from_secs(TXN_EXPIRATION_SECONDS as u64 + 30);
 const MAX_CHILD_VASP_NUM: usize = 65536;
 const MAX_VASP_ACCOUNT_NUM: usize = 16;

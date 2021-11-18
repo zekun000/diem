@@ -16,6 +16,7 @@ futures = "0.3.12"
 hex = "0.4.3"
 jemallocator = { version = "0.3.2", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
 rand = "0.8.3"
+rayon = "1.5.0"
 structopt = "0.3.21"
 tokio = { version = "1.8.1", features = ["full"] }
 tokio-stream = "0.1.4"
@@ -59,4 +60,4 @@ storage-service-server = { path = "../state-sync/storage-service/server" }
 [features]
 default = []
 assert-private-keys-not-cloneable = ["diem-crypto/assert-private-keys-not-cloneable"]
-failpoints = ["fail/failpoints", "consensus/failpoints", "executor/failpoints", "diem-json-rpc/failpoints", "diem-mempool/failpoints"]
+failpoints = []

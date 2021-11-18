@@ -142,11 +142,12 @@ impl TxnManager for MempoolProxy {
             .iter()
             .zip_eq(compute_results.compute_status().iter().skip(1))
         {
-            if let TransactionStatus::Discard(_) = status {
+            if let TransactionStatus::Discard(status) = status {
                 rejected_txns.push(TransactionSummary {
                     sender: txn.sender(),
                     sequence_number: txn.sequence_number(),
                 });
+                error!("Txn failed with {:?}", status);
             }
         }
 

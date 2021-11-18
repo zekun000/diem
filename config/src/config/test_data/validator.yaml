@@ -48,7 +48,7 @@ validator_network:
             token:
                 from_disk: "/full/path/to/token"
     mutual_authentication: true
-    max_frame_size: 8388608 # 8 MiB
+    max_frame_size: 83886080 # 8 MiB
     network_address_key_backend:
         type: "vault"
         server: "https://127.0.0.1:8200"

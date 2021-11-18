@@ -250,7 +250,7 @@ impl Mempool {
             .collect();
 
         debug!(
-            LogSchema::new(LogEntry::GetBlock).txns(block_log),
+            LogSchema::new(LogEntry::GetBlock),
             seen_consensus = seen_size,
             walked = txn_walked,
             seen_after = seen.len(),

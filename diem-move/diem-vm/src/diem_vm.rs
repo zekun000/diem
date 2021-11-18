@@ -15,7 +15,7 @@ use crate::{
     },
     errors::expect_only_successful_execution,
     logging::AdapterLogSchema,
-    script_to_script_function,
+    read_write_set_analysis, script_to_script_function,
     system_module_names::*,
     transaction_metadata::TransactionMetadata,
     VMExecutor, VMValidator,
@@ -38,7 +38,6 @@ use diem_types::{
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteSet, WriteSetMut},
 };
-use fail::fail_point;
 use move_core_types::{
     account_address::AccountAddress,
     gas_schedule::GasAlgebra,
@@ -49,11 +48,18 @@ use move_core_types::{
 };
 use move_vm_runtime::session::Session;
 use move_vm_types::gas_schedule::GasStatus;
+use once_cell::sync::Lazy;
 use read_write_set_dynamic::NormalizedReadWriteSetAnalysis;
 use std::{
     collections::HashSet,
     convert::{AsMut, AsRef},
 };
+
+pub static RW_ANALYSIS: Lazy<NormalizedReadWriteSetAnalysis> = Lazy::new(|| {
+    read_write_set::analyze(diem_framework_releases::current_modules())
+        .expect("Failed to get ReadWriteSet for current Diem Framework")
+        .normalize_all_scripts(read_write_set_analysis::add_on_functions_list())
+});
 
 #[derive(Clone)]
 pub struct DiemVM(pub(crate) DiemVMImpl);
@@ -192,11 +198,11 @@ impl DiemVM {
         account_currency_symbol: &IdentStr,
         log_context: &AdapterLogSchema,
     ) -> Result<(VMStatus, TransactionOutput), VMStatus> {
-        fail_point!("move_adapter::execute_script_or_script_function", |_| {
-            Err(VMStatus::Error(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
-        });
+        // fail_point!("move_adapter::execute_script_or_script_function", |_| {
+        //     Err(VMStatus::Error(
+        //         StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        //     ))
+        // });
 
         // Run the execution logic
         {
@@ -279,11 +285,11 @@ impl DiemVM {
         account_currency_symbol: &IdentStr,
         log_context: &AdapterLogSchema,
     ) -> Result<(VMStatus, TransactionOutput), VMStatus> {
-        fail_point!("move_adapter::execute_module", |_| {
-            Err(VMStatus::Error(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
-        });
+        // fail_point!("move_adapter::execute_module", |_| {
+        //     Err(VMStatus::Error(
+        //         StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        //     ))
+        // });
 
         // Publish the module
         let module_address = if self.0.publishing_option(log_context)?.is_open_module() {
@@ -500,11 +506,11 @@ impl DiemVM {
         block_metadata: BlockMetadata,
         log_context: &AdapterLogSchema,
     ) -> Result<(VMStatus, TransactionOutput), VMStatus> {
-        fail_point!("move_adapter::process_block_prologue", |_| {
-            Err(VMStatus::Error(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
-        });
+        // fail_point!("move_adapter::process_block_prologue", |_| {
+        //     Err(VMStatus::Error(
+        //         StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        //     ))
+        // });
 
         let txn_data = TransactionMetadata {
             sender: account_config::reserved_vm_address(),
@@ -551,11 +557,11 @@ impl DiemVM {
         txn: &SignatureCheckedTransaction,
         log_context: &AdapterLogSchema,
     ) -> Result<(VMStatus, TransactionOutput), VMStatus> {
-        fail_point!("move_adapter::process_writeset_transaction", |_| {
-            Err(VMStatus::Error(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
-        });
+        // fail_point!("move_adapter::process_writeset_transaction", |_| {
+        //     Err(VMStatus::Error(
+        //         StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        //     ))
+        // });
 
         let account_currency_symbol = match get_gas_currency_code(txn) {
             Ok(symbol) => symbol,
@@ -715,35 +721,35 @@ impl VMExecutor for DiemVM {
         transactions: Vec<Transaction>,
         state_view: &impl StateView,
     ) -> Result<Vec<TransactionOutput>, VMStatus> {
-        fail_point!("move_adapter::execute_block", |_| {
-            Err(VMStatus::Error(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
-        });
+        // fail_point!("move_adapter::execute_block", |_| {
+        //     Err(VMStatus::Error(
+        //         StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        //     ))
+        // });
 
         // Execute transactions in parallel if on chain config is set and loaded.
-        if let Some(read_write_set_analysis) =
-            ParallelExecutionConfig::fetch_config(&RemoteStorage::new(state_view))
-                .and_then(|config| config.read_write_analysis_result)
-                .map(|config| config.into_inner())
-        {
-            let analysis_reuslt = NormalizedReadWriteSetAnalysis::new(read_write_set_analysis);
+        // if let Some(read_write_set_analysis) =
+        //     ParallelExecutionConfig::fetch_config(&RemoteStorage::new(state_view))
+        //         .and_then(|config| config.read_write_analysis_result)
+        //         .map(|config| config.into_inner())
+        // {
+        let analysis_reuslt = &*RW_ANALYSIS;
 
-            // Note that writeset transactions will be executed sequentially as it won't be inferred
-            // by the read write set analysis and thus fall into the sequential path.
-            let (result, _) = crate::parallel_executor::ParallelDiemVM::execute_block(
-                &analysis_reuslt,
-                transactions,
-                state_view,
-            )?;
-            Ok(result)
-        } else {
-            let output = Self::execute_block_and_keep_vm_status(transactions, state_view)?;
-            Ok(output
-                .into_iter()
-                .map(|(_vm_status, txn_output)| txn_output)
-                .collect())
-        }
+        // Note that writeset transactions will be executed sequentially as it won't be inferred
+        // by the read write set analysis and thus fall into the sequential path.
+        let (result, _) = crate::parallel_executor::ParallelDiemVM::execute_block(
+            analysis_reuslt,
+            transactions,
+            state_view,
+        )?;
+        Ok(result)
+        // } else {
+        //     let output = Self::execute_block_and_keep_vm_status(transactions, state_view)?;
+        //     Ok(output
+        //         .into_iter()
+        //         .map(|(_vm_status, txn_output)| txn_output)
+        //         .collect())
+        // }
     }
 }
 

@@ -86,6 +86,11 @@ fn main() {
             rng,
         );
     } else {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .thread_name(|index| format!("rayon-global-{}", index))
+            .build_global()
+            .expect("Failed to build rayon global thread pool.");
         let config = NodeConfig::load(args.config.unwrap()).expect("Failed to load node config");
         println!("Using node config {:?}", &config);
         diem_node::start(&config, None);

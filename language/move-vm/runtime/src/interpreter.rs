@@ -6,7 +6,6 @@ use crate::{
     native_functions::NativeContext,
     trace,
 };
-use fail::fail_point;
 use move_binary_format::{
     errors::*,
     file_format::{Bytecode, FunctionHandleIndex, FunctionInstantiationIndex},
@@ -695,13 +694,13 @@ impl Frame {
                     interpreter
                 );
 
-                fail_point!("move_vm::interpreter_loop", |_| {
-                    Err(
-                        PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
-                            "Injected move_vm::interpreter verifier failure".to_owned(),
-                        ),
-                    )
-                });
+                // fail_point!("move_vm::interpreter_loop", |_| {
+                //     Err(
+                //         PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION).with_message(
+                //             "Injected move_vm::interpreter verifier failure".to_owned(),
+                //         ),
+                //     )
+                // });
 
                 match instruction {
                     Bytecode::Pop => {

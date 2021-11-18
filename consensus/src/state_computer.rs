@@ -22,14 +22,14 @@ use std::{boxed::Box, sync::Arc};
 pub struct ExecutionProxy {
     execution_correctness_client: Box<dyn ExecutionCorrectness + Send + Sync>,
     mempool_notifier: Arc<dyn TxnManager>,
-    state_sync_notifier: Box<dyn ConsensusNotificationSender>,
+    state_sync_notifier: Arc<dyn ConsensusNotificationSender>,
 }
 
 impl ExecutionProxy {
     pub fn new(
         execution_correctness_client: Box<dyn ExecutionCorrectness + Send + Sync>,
         mempool_notifier: Arc<dyn TxnManager>,
-        state_sync_notifier: Box<dyn ConsensusNotificationSender>,
+        state_sync_notifier: Arc<dyn ConsensusNotificationSender>,
     ) -> Self {
         Self {
             execution_correctness_client,
@@ -101,17 +101,19 @@ impl StateComputer for ExecutionProxy {
             self.execution_correctness_client
                 .commit_blocks(block_ids, finality_proof.clone())?
         );
+        let client = self.state_sync_notifier.clone();
+        let blocks_clone = blocks.to_vec();
 
-        if let Err(e) = monitor!(
-            "notify_state_sync",
-            self.state_sync_notifier
-                .notify_new_commit(txns, reconfig_events)
-                .await
-        ) {
-            error!(error = ?e, "Failed to notify state synchronizer");
-        }
+        tokio::spawn(async move {
+            if let Err(e) = monitor!(
+                "notify_state_sync",
+                client.notify_new_commit(txns, reconfig_events).await
+            ) {
+                error!(error = ?e, "Failed to notify state synchronizer");
+            }
 
-        callback(blocks, finality_proof);
+            callback(&blocks_clone, finality_proof);
+        });
 
         Ok(())
     }

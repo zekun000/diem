@@ -11,6 +11,7 @@ use anyhow::{bail, Result as AResult};
 use mvhashmap::{MVHashMap, Version};
 use num_cpus;
 use rayon::{prelude::*, scope};
+use std::time::Instant;
 use std::{
     cmp::{max, min},
     hash::Hash,
@@ -86,6 +87,7 @@ where
         let chunks_size = max(1, num_txns / self.num_cpus);
 
         // Get the read and write dependency for each transaction.
+        let t1 = Instant::now();
         let infer_result: Vec<_> = {
             match signature_verified_block
                 .par_iter()
@@ -99,6 +101,10 @@ where
                 Err(_) => return Err(Error::InferencerError),
             }
         };
+        println!(
+            "infer time {}ms",
+            Instant::now().duration_since(t1).as_millis()
+        );
 
         // Use write analysis result to construct placeholders.
         let path_version_tuples: Vec<(T::Key, usize)> = infer_result
@@ -128,6 +134,86 @@ where
         let outcomes = OutcomeArray::new(num_txns);
 
         let scheduler = Arc::new(Scheduler::new(num_txns));
+        let task = E::init(task_initial_arguments);
+        let t2 = Instant::now();
+        if let Some(idx) = scheduler.next_txn_to_execute() {
+            assert_eq!(idx, 0);
+            let txn = &signature_verified_block[idx];
+            let txn_accesses = &infer_result[idx];
+
+            // If the txn has unresolved dependency, adds the txn to deps_mapping of its dependency (only the first one) and continue
+            if txn_accesses
+                .keys_read
+                .iter()
+                .any(|k| match versioned_data_cache.read(k, idx) {
+                    Err(Some(dep_id)) => scheduler.add_dependency(idx, dep_id),
+                    Ok(_) | Err(None) => false,
+                })
+            {
+                panic!();
+            }
+
+            // Process the output of a transaction
+            let view = MVHashMapView {
+                map: &versioned_data_cache,
+                version: idx,
+                scheduler: &scheduler,
+                has_unexpected_read: AtomicBool::new(false),
+            };
+            let execute_result = task.execute_transaction(&view, txn);
+            if view.has_unexpected_read() {
+                // We've already added this transaction back to the scheduler in the
+                // MVHashmapView where this bit is set, thus it is safe to continue
+                // here.
+                panic!();
+            }
+            let commit_result = match execute_result {
+                ExecutionStatus::Success(output) => {
+                    // Commit the side effects to the versioned_data_cache.
+                    if output
+                        .get_writes()
+                        .into_iter()
+                        .all(|(k, v)| versioned_data_cache.write(&k, idx, v).is_ok())
+                    {
+                        ExecutionStatus::Success(output)
+                    } else {
+                        // Failed to write to the versioned data cache as
+                        // transaction write to a key that wasn't estimated by the
+                        // inferencer, aborting the entire execution.
+                        ExecutionStatus::Abort(Error::UnestimatedWrite)
+                    }
+                }
+                ExecutionStatus::SkipRest(output) => {
+                    // Commit and skip the rest of the transactions.
+                    if output
+                        .get_writes()
+                        .into_iter()
+                        .all(|(k, v)| versioned_data_cache.write(&k, idx, v).is_ok())
+                    {
+                        scheduler.set_stop_version(idx + 1);
+                        ExecutionStatus::SkipRest(output)
+                    } else {
+                        // Failed to write to the versioned data cache as
+                        // transaction write to a key that wasn't estimated by the
+                        // inferencer, aborting the entire execution.
+                        ExecutionStatus::Abort(Error::UnestimatedWrite)
+                    }
+                }
+                ExecutionStatus::Abort(err) => {
+                    // Abort the execution with user defined error.
+                    scheduler.set_stop_version(idx + 1);
+                    ExecutionStatus::Abort(Error::UserError(err.clone()))
+                }
+            };
+
+            for write in txn_accesses.keys_written.iter() {
+                // Unwrap here is fine because all writes here should be in the mvhashmap.
+                assert!(versioned_data_cache.skip_if_not_set(write, idx).is_ok());
+            }
+
+            scheduler.finish_execution(idx);
+            outcomes.set_result(idx, commit_result);
+        }
 
         scope(|s| {
             // How many threads to use?
@@ -218,6 +304,10 @@ where
                 });
             }
         });
+        println!(
+            "execute time {}ms",
+            Instant::now().duration_since(t2).as_millis()
+        );
 
         // Splits the head of the vec of results that are valid
         let valid_results_length = scheduler.num_txn_to_execute();

@@ -3,6 +3,8 @@
 
 #![forbid(unsafe_code)]
 
+use rayon::prelude::*;
+use std::time::Instant;
 use std::{
     collections::{hash_map, HashMap, HashSet},
     convert::TryFrom,
@@ -293,12 +295,22 @@ where
             .map(|(idx, _)| idx + 1);
         let transaction_count = new_epoch_marker.unwrap_or(vm_outputs.len());
 
-        let txn_blobs = itertools::zip_eq(vm_outputs.iter(), transactions.iter())
+        let txn_state = itertools::zip_eq(vm_outputs.iter(), transactions.iter())
             .take(transaction_count)
             .map(|(vm_output, txn)| {
                 process_write_set(txn, &mut account_to_state, vm_output.write_set().clone())
             })
             .collect::<Result<Vec<_>>>()?;
+        let txn_blobs = txn_state
+            .into_par_iter()
+            .with_min_len(50)
+            .map(|state_map| {
+                state_map
+                    .into_iter()
+                    .map(|(k, v)| (k, AccountStateBlob::try_from(&v).unwrap()))
+                    .collect::<HashMap<_, _>>()
+            })
+            .collect::<Vec<_>>();
 
         let (roots_with_node_hashes, current_state_tree) = parent_trees
             .state_tree()
@@ -415,6 +427,10 @@ where
         } else {
             None
         };
+        std::thread::spawn(move || {
+            drop(account_to_state);
+            drop(proof_reader);
+        });
 
         let current_transaction_accumulator =
             parent_trees.txn_accumulator().append(&txn_info_hashes);
@@ -614,7 +630,7 @@ pub fn process_write_set(
     transaction: &Transaction,
     account_to_state: &mut HashMap<AccountAddress, AccountState>,
     write_set: WriteSet,
-) -> Result<HashMap<AccountAddress, AccountStateBlob>> {
+) -> Result<HashMap<AccountAddress, AccountState>> {
     let mut updated_blobs = HashMap::new();
 
     // Find all addresses this transaction touches while processing each write op.
@@ -654,9 +670,12 @@ pub fn process_write_set(
     }
 
     for addr in addrs {
-        let account_state = account_to_state.get(&addr).expect("Address should exist.");
-        let account_blob = AccountStateBlob::try_from(account_state)?;
-        updated_blobs.insert(addr, account_blob);
+        let account_state: AccountState = account_to_state
+            .get(&addr)
+            .expect("Address should exist.")
+            .clone();
+        // let account_blob = AccountStateBlob::try_from(account_state)?;
+        updated_blobs.insert(addr, account_state);
     }
 
     Ok(updated_blobs)

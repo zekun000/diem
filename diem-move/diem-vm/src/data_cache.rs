@@ -13,7 +13,6 @@ use diem_types::{
     vm_status::StatusCode,
     write_set::{WriteOp, WriteSet},
 };
-use fail::fail_point;
 use move_binary_format::errors::*;
 use move_core_types::{
     account_address::AccountAddress,
@@ -71,9 +70,9 @@ impl<'a, S: StateView> StateViewCache<'a, S> {
 impl<'block, S: StateView> StateView for StateViewCache<'block, S> {
     // Get some data either through the cache or the `StateView` on a cache miss.
     fn get(&self, access_path: &AccessPath) -> anyhow::Result<Option<Vec<u8>>> {
-        fail_point!("move_adapter::data_cache::get", |_| Err(format_err!(
-            "Injected failure in data_cache::get"
-        )));
+        // fail_point!("move_adapter::data_cache::get", |_| Err(format_err!(
+        //     "Injected failure in data_cache::get"
+        // )));
 
         match self.data_map.get(access_path) {
             Some(opt_data) => Ok(opt_data.clone()),

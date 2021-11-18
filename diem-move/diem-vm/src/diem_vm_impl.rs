@@ -26,7 +26,6 @@ use diem_types::{
     vm_status::{KeptVMStatus, StatusCode, VMStatus},
     write_set::{WriteOp, WriteSet, WriteSetMut},
 };
-use fail::fail_point;
 use move_binary_format::errors::Location;
 use move_core_types::{
     account_address::AccountAddress,
@@ -324,11 +323,11 @@ impl DiemVMImpl {
         account_currency_symbol: &IdentStr,
         log_context: &AdapterLogSchema,
     ) -> Result<(), VMStatus> {
-        fail_point!("move_adapter::run_success_epilogue", |_| {
-            Err(VMStatus::Error(
-                StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
-            ))
-        });
+        // fail_point!("move_adapter::run_success_epilogue", |_| {
+        //     Err(VMStatus::Error(
+        //         StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        //     ))
+        // });
 
         let gas_currency_ty =
             account_config::type_tag_for_currency_code(account_currency_symbol.to_owned());

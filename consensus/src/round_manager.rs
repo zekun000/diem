@@ -71,10 +71,7 @@ impl UnverifiedEvent {
                 v.verify(validator)?;
                 VerifiedEvent::VoteMsg(v)
             }
-            UnverifiedEvent::SyncInfo(s) => {
-                s.verify(validator)?;
-                VerifiedEvent::SyncInfo(s)
-            }
+            UnverifiedEvent::SyncInfo(s) => VerifiedEvent::UnverifiedSyncInfo(s),
             UnverifiedEvent::CommitVote(cv) => {
                 cv.verify(validator)?;
                 VerifiedEvent::CommitVote(cv)
@@ -115,7 +112,7 @@ pub enum VerifiedEvent {
     // network messages
     ProposalMsg(Box<ProposalMsg>),
     VoteMsg(Box<VoteMsg>),
-    SyncInfo(Box<SyncInfo>),
+    UnverifiedSyncInfo(Box<SyncInfo>),
     CommitVote(Box<CommitVote>),
     CommitDecision(Box<CommitDecision>),
     BlockRetrievalRequest(Box<IncomingBlockRetrievalRequest>),
@@ -848,7 +845,7 @@ impl RoundManager {
                 VerifiedEvent::VoteMsg(vote_msg) => {
                     monitor!("process_vote", self.process_vote_msg(*vote_msg).await)
                 }
-                VerifiedEvent::SyncInfo(sync_info) => {
+                VerifiedEvent::UnverifiedSyncInfo(sync_info) => {
                     monitor!(
                         "process_sync_info",
                         self.process_sync_info_msg(*sync_info, peer_id).await

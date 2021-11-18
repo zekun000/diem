@@ -81,6 +81,9 @@ pub fn run_benchmark(
     let mut generator =
         TransactionGenerator::new_with_metafile(genesis_key, block_sender, source_dir);
     let start_version = generator.version();
+    let mut cpu_ids = core_affinity::get_core_ids().unwrap();
+    let id1 = cpu_ids.pop().unwrap();
+    let id2 = cpu_ids.pop().unwrap();
 
     // Spawn two threads to run transaction generator and executor separately.
     let gen_thread = std::thread::Builder::new()
@@ -93,6 +96,7 @@ pub fn run_benchmark(
     let exe_thread = std::thread::Builder::new()
         .name("txn_executor".to_string())
         .spawn(move || {
+            core_affinity::set_for_current(id1);
             let mut exe = TransactionExecutor::new(
                 executor_1,
                 parent_block_id,
@@ -108,6 +112,7 @@ pub fn run_benchmark(
     let commit_thread = std::thread::Builder::new()
         .name("txn_committer".to_string())
         .spawn(move || {
+            core_affinity::set_for_current(id2);
             let mut committer =
                 TransactionCommitter::new(executor_2, start_version, commit_receiver);
             committer.run();
