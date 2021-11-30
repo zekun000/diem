@@ -49,7 +49,7 @@ pub trait ReadWriteSetInferencer: Sync {
 
 /// Trait for single threaded transaction executor.
 // TODO: Sync should not be required. Sync is only introduced because this trait occurs as a phantom type of executor struct.
-pub trait ExecutorTask: Sync + Clone {
+pub trait ExecutorTask: Send + Sync + Clone {
     /// Type of transaction and its associated key and value.
     type T: Transaction;
 
@@ -61,7 +61,7 @@ pub trait ExecutorTask: Sync + Clone {
 
     /// Type to intialize the single thread transaction executor. Copy and Sync are required because
     /// we will create an instance of executor on each individual thread.
-    type Argument: Sync + Copy;
+    type Argument: Send + Sync + Copy;
 
     /// Create an instance of the transaction executor.
     fn init(args: Self::Argument) -> Self;

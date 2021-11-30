@@ -110,19 +110,21 @@ where
         };
         let mut now = std::time::Instant::now();
 
-        // Get the read and write dependency for each transaction.
-        let infer_result: Vec<_> = {
-            match signature_verified_block
+        let (infer_result, single_threaded_executor) = rayon::join(|| {
+            signature_verified_block
                 .par_iter()
                 .with_min_len(chunks_size)
                 .map(|txn| self.inferencer.infer_reads_writes(txn))
                 .collect::<AResult<Vec<_>>>()
-            {
-                Ok(res) => res,
-                // Inferencer passed in by user failed to get the read/writeset of a transaction,
-                // abort parallel execution.
-                Err(_) => return Err(Error::InferencerError),
-            }
+        }, || {
+            E::init(task_initial_arguments)
+        });
+
+        let infer_result = match infer_result {
+            Ok(res) => res,
+            // Inferencer passed in by user failed to get the read/writeset of a transaction,
+            // abort parallel execution.
+            Err(_) => return Err(Error::InferencerError),
         };
 
         if log {
@@ -166,8 +168,6 @@ where
             stats.max_dependency = max_dependency_level;
             now = std::time::Instant::now();
         }
-
-        let single_threaded_executor = E::init(task_initial_arguments);
 
         scope(|s| {
             // How many threads to use?
