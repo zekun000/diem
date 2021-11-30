@@ -206,6 +206,7 @@ where
 // Naive transaction executor implementation.
 ///////////////////////////////////////////////////////////////////////////
 
+#[derive(Clone)]
 pub struct Task<K, V>(PhantomData<(K, V)>);
 
 impl<K, V> Task<K, V> {
@@ -213,6 +214,7 @@ impl<K, V> Task<K, V> {
         Self(PhantomData)
     }
 }
+
 
 impl<K, V> ExecutorTask for Task<K, V>
 where

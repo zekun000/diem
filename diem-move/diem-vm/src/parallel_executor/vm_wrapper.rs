@@ -22,6 +22,15 @@ pub(crate) struct DiemVMWrapper<'a, S> {
     base_view: &'a S,
 }
 
+impl<'a, S> std::clone::Clone for DiemVMWrapper<'a, S> {
+    fn clone(&self) -> Self {
+        DiemVMWrapper {
+            vm: self.vm.clone(),
+            base_view: self.base_view.clone(),
+        }
+    }
+}
+
 impl<'a, S: 'a + StateView> ExecutorTask for DiemVMWrapper<'a, S> {
     type T = PreprocessedTransaction;
     type Output = DiemTransactionOutput;

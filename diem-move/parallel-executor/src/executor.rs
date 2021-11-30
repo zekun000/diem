@@ -167,6 +167,8 @@ where
             now = std::time::Instant::now();
         }
 
+        let single_threaded_executor = E::init(task_initial_arguments);
+
         scope(|s| {
             // How many threads to use?
             let compute_cpus = min(1 + (num_txns / 50), self.num_cpus); // Ensure we have at least 50 tx per thread.
@@ -178,7 +180,7 @@ where
                 s.spawn(|_| {
                     let scheduler = Arc::clone(&scheduler);
                     // Make a new executor per thread.
-                    let task = E::init(task_initial_arguments);
+                    let task = single_threaded_executor.clone();
 
                     while let Some(idx) = scheduler.next_txn_to_execute() {
                         let txn = &signature_verified_block[idx];
