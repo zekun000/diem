@@ -97,7 +97,8 @@ impl ReadWriteSetAnalysis {
                             .map(|data| data.annotations.get::<ReadWriteSetState>())
                             .flatten()
                             .unwrap()
-                            .normalize(&self.env),
+                            .normalize(&self.env)
+                            .trim(),
                     );
                 }
             }
