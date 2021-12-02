@@ -6,14 +6,15 @@ mod storage_wrapper;
 mod vm_wrapper;
 
 use crate::{
-    logging::AdapterLogSchema,
     adapter_common::{preprocess_transaction, PreprocessedTransaction},
     data_cache::RemoteStorage,
     diem_vm::DiemVM,
+    logging::AdapterLogSchema,
     parallel_executor::{
         read_write_set_analyzer::ReadWriteSetAnalysisWrapper, vm_wrapper::DiemVMWrapper,
     },
 };
+use diem_logger::prelude::*;
 use diem_parallel_executor::{
     errors::Error,
     executor::ParallelTransactionExecutor,
@@ -28,7 +29,6 @@ use diem_types::{
 use move_core_types::vm_status::{StatusCode, VMStatus};
 use rayon::prelude::*;
 use read_write_set_dynamic::NormalizedReadWriteSetAnalysis;
-use diem_logger::prelude::*;
 
 impl PTransaction for PreprocessedTransaction {
     type Key = AccessPath;
@@ -108,8 +108,7 @@ impl ParallelDiemVM {
             Err(err @ Error::InferencerError) | Err(err @ Error::UnestimatedWrite) => {
                 warn!(
                     AdapterLogSchema::new(state_view.id(), 0),
-                    "Parallel Execution Error! {:?}",
-                    err,
+                    "Parallel Execution Error! {:?}", err,
                 );
 
                 let output = DiemVM::execute_block_and_keep_vm_status(transactions, state_view)?;

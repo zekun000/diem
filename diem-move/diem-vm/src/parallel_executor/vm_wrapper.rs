@@ -16,16 +16,17 @@ use diem_parallel_executor::{
 use diem_state_view::StateView;
 use diem_types::{access_path::AccessPath, account_config::ACCOUNT_MODULE, write_set::WriteOp};
 use move_core_types::vm_status::VMStatus;
+use std::cell::RefCell;
+
+thread_local!(static CACHE_VM: RefCell<Option<DiemVM>> = RefCell::new(None));
 
 pub(crate) struct DiemVMWrapper<'a, S> {
-    vm: DiemVM,
     base_view: &'a S,
 }
 
 impl<'a, S> std::clone::Clone for DiemVMWrapper<'a, S> {
     fn clone(&self) -> Self {
         DiemVMWrapper {
-            vm: self.vm.clone(),
             base_view: self.base_view.clone(),
         }
     }
@@ -38,8 +39,6 @@ impl<'a, S: 'a + StateView> ExecutorTask for DiemVMWrapper<'a, S> {
     type Argument = &'a S;
 
     fn init(argument: &'a S) -> Self {
-        let vm = DiemVM::new(argument);
-
         // Loading `0x1::DiemAccount` and its transitive dependency into the code cache.
         //
         // This should give us a warm VM to avoid the overhead of VM cold start.
@@ -48,10 +47,7 @@ impl<'a, S: 'a + StateView> ExecutorTask for DiemVMWrapper<'a, S> {
         // Loading up `0x1::DiemAccount` should be sufficient as this is the most common module
         // used for prologue, epilogue and transfer functionality.
 
-        let _ = vm.load_module(&ACCOUNT_MODULE, &RemoteStorage::new(argument));
-
         Self {
-            vm,
             base_view: argument,
         }
     }
@@ -64,10 +60,18 @@ impl<'a, S: 'a + StateView> ExecutorTask for DiemVMWrapper<'a, S> {
         let log_context = AdapterLogSchema::new(self.base_view.id(), view.version());
         let versioned_view = VersionedView::new_view(self.base_view, view);
 
-        match self
-            .vm
-            .execute_single_transaction(txn, &versioned_view, &log_context)
-        {
+        let vm = CACHE_VM.with(|cell| {
+            let mut borrow = cell.borrow_mut();
+            if let Some(ref vm) = *borrow {
+                vm.clone()
+            } else {
+                let vm = DiemVM::new(self.base_view);
+                *borrow = Some(vm.clone());
+                vm
+            }
+        });
+
+        match vm.execute_single_transaction(txn, &versioned_view, &log_context) {
             Ok((vm_status, output, sender)) => {
                 if output.status().is_discarded() {
                     match sender {
