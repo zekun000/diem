@@ -20,7 +20,7 @@ jobs:
       TAG: github-1
       DOCKERHUB_ORG: libra
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: build image
         run: docker build -f docker/ci/github/Dockerfile -t ${{ env.DOCKERHUB_ORG }}/build_environment:${{ env.TAG }} .
       - name: Sign in to dockerhub, install image signing cert.
