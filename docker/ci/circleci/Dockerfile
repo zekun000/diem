@@ -1,5 +1,5 @@
 #while using circle we'll use circle's base image.
-FROM cimg/base:2020.12@sha256:a9adc0fb9b3d2440961a8042c5b03a387b3a0d6e2ab9e73ce20bff1ae84d64be  AS setup_ci
+FROM cimg/base:2022.04@sha256:a394761a8abe3dbb25170529be8687c5d47eea2cbe118e37a7b49adb48692d45  AS setup_ci
 
 WORKDIR /diem
 COPY rust-toolchain /diem/rust-toolchain
