@@ -1,4 +1,4 @@
-FROM debian:buster-20201209@sha256:5b5fa7e155b1f19dffb996ea64e55520b80d5bd7a8fdb5aed1acabd217e9ed59 AS toolchain
+FROM debian:buster-20220509@sha256:405f48fbb359190809bd91aac79c3f6c346c1e79878c839351c6a817db5e9fc4 AS toolchain
 
 # To use http/https proxy while building, use:
 # docker build --build-arg https_proxy=http://fwdproxy:8080 --build-arg http_proxy=http://fwdproxy:8080
